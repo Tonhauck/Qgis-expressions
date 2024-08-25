@@ -1,0 +1,67 @@
+# Importer les modules nécessaires de QGIS
+from qgis.core import QgsPointXY, QgsGeometry, QgsFeatureRequest, QgsVectorLayer
+from qgis.PyQt.QtCore import QVariant
+from qgis.utils import iface
+from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem
+
+# Fonction pour retourner les coordonnées du clic
+def get_clicked_point():
+    """ Retourne les coordonnées du clic sur la carte """
+    # Obtenir le point du dernier clic sur le canevas de la carte
+    canvas = iface.mapCanvas()
+    point = canvas.getCoordinateTransform().toMapCoordinates(canvas.mouseLastXY())
+    return QgsPointXY(point.x(), point.y())
+
+# Récupérer la couche active
+layer = iface.activeLayer()
+
+# Vérifier si la couche est valide et est une couche vectorielle
+if not layer or layer.type() != QgsVectorLayer.VectorLayer:
+    print("Erreur: La couche active n'est pas valide ou n'est pas une couche vectorielle.")
+else:
+    clicked_point = get_clicked_point()
+
+    # Convertir le point cliqué en géométrie
+    clicked_geometry = QgsGeometry.fromPointXY(clicked_point)
+
+    # Définir une requête pour rechercher des entités proches du point cliqué
+    request = QgsFeatureRequest().setFilterRect(clicked_geometry.boundingBox())
+
+    # Trouver les entités à l'emplacement du clic
+    features = [feat for feat in layer.getFeatures(request) if feat.geometry().intersects(clicked_geometry)]
+
+    # Vérifier qu'une entité est présente au niveau du point cliqué
+    if features:
+        selected_feature = features[0]
+        # Obtenir la valeur du champ NAME_0 de l'entité sélectionnée
+        name_0 = selected_feature["NAME_0"]
+
+        # Créer une expression pour filtrer les entités avec le même NAME_0
+        expression = f'"NAME_0" = \'{name_0}\''
+
+        # Sélectionner les entités correspondant à l'expression
+        layer.selectByExpression(expression)
+
+        # Récupérer les entités sélectionnées
+        selected_features = [feat for feat in layer.getFeatures(layer.selectedFeatureIds())]
+
+        # Créer un tableau pour afficher les attributs demandés
+        table = QTableWidget()
+        table.setWindowTitle(f"Entités sélectionnées pour : = {name_0}")
+        table.setColumnCount(5)
+        table.setHorizontalHeaderLabels(["COUNTRY", "CONTINENT", "NAME_1", "NAME_2", "NAME_4"])
+        table.setRowCount(len(selected_features))
+
+        # Remplir le tableau avec les données des attributs
+        for row, feat in enumerate(selected_features):
+            table.setItem(row, 0, QTableWidgetItem(feat["COUNTRY"]))
+            table.setItem(row, 1, QTableWidgetItem(feat["CONTINENT"]))
+            table.setItem(row, 2, QTableWidgetItem(feat["NAME_1"]))
+            table.setItem(row, 3, QTableWidgetItem(feat["NAME_2"]))
+            table.setItem(row, 4, QTableWidgetItem(feat["NAME_4"]))
+
+        # Afficher le tableau
+        table.resize(800, 600)
+        table.show()
+    else:
+        print("Aucune entité trouvée à l'emplacement du clic.")
